@@ -4,11 +4,11 @@ import (
 	"context"
 	"log"
 	"os"
-	"time"
 
+	"github.com/TurboKang/newton/database"
+	"github.com/TurboKang/newton/fetcher"
 	"github.com/amir-the-h/okex"
 	"github.com/amir-the-h/okex/api"
-	"github.com/amir-the-h/okex/requests/rest/market"
 )
 
 func main() {
@@ -16,34 +16,28 @@ func main() {
 	secretKey := os.Getenv("SECRET_KEY")
 	passphrase := os.Getenv("PASS_PHRASE")
 
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbDatabase := os.Getenv("DB_DATABASE")
+
 	dest := okex.NormalServer // The main API server
 	ctx := context.Background()
 	client, err := api.NewClient(ctx, apiKey, secretKey, passphrase, dest)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	response, err := client.Rest.Market.GetCandlesticksHistory(market.GetCandlesticks{
-		InstID: "BTC-USDT-SWAP",
-		Bar:    okex.Bar15m,
-		After:  time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli(),
-		Limit:  10,
-	})
-	if err != nil {
-		log.Fatalln(err)
+
+	db := database.NewConnector(dbUser, dbPassword, dbHost, dbPort, dbDatabase)
+	db.Genesis()
+
+	tickers := []string{"BTC-USDT-SWAP", "AVAX-USDT-SWAP", "LUNA-USDT-SWAP", "AAVE-USDT-SWAP", "ETH-USDT-SWAP"}
+
+	fetchOperator := fetcher.NewFetcher(client.Rest, db)
+
+	for _, ticker := range tickers {
+		fetchOperator.Migrate(ticker)
 	}
 
-	for _, candle := range response.Candles {
-		log.Printf("Candles %+v", candle)
-	}
-	t := (*time.Time)(&response.Candles[len(response.Candles)-1].TS)
-	response, err = client.Rest.Market.GetCandlesticksHistory(market.GetCandlesticks{
-		InstID: "BTC-USDT-SWAP",
-		Bar:    okex.Bar15m,
-		After:  t.UnixMilli(),
-		Limit:  10,
-	})
-
-	for _, candle := range response.Candles {
-		log.Printf("Candles2 %+v", candle)
-	}
 }
